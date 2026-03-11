@@ -2,14 +2,15 @@ import anthropic
 import json
 import os
 from datetime import datetime
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import unquote_plus, parse_qs
+from flask import Flask, request, redirect, make_response
 from dotenv import load_dotenv
 
 load_dotenv()
 
 api_key = os.environ.get("ANTHROPIC_API_KEY")
 print(f"API KEY LOADED: {os.environ.get('ANTHROPIC_API_KEY', 'NOT FOUND')[:20]}")
+
+app = Flask(__name__)
 conversation = []
 
 ORDERS_FILE = "orders.json"
@@ -130,9 +131,9 @@ HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Contact by Tems — Skincare Assistant</title>
 <style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-  body {{
+  body {
     font-family: 'Segoe UI', Georgia, sans-serif;
     background: #0d0d0d;
     min-height: 100vh;
@@ -140,58 +141,58 @@ HTML = """<!DOCTYPE html>
     flex-direction: column;
     align-items: center;
     padding: 30px 16px;
-  }}
+  }
 
-  .header {{
+  .header {
     text-align: center;
     margin-bottom: 28px;
-  }}
+  }
 
-  .brand {{
+  .brand {
     font-size: 11px;
     letter-spacing: 6px;
     color: #c9a96e;
     text-transform: uppercase;
     margin-bottom: 8px;
-  }}
+  }
 
-  .logo {{
+  .logo {
     font-size: 32px;
     font-weight: 300;
     color: #f5f0e8;
     letter-spacing: 4px;
     text-transform: uppercase;
-  }}
+  }
 
-  .logo span {{
+  .logo span {
     color: #c9a96e;
     font-weight: 700;
-  }}
+  }
 
-  .divider {{
+  .divider {
     width: 60px;
     height: 1px;
     background: linear-gradient(to right, transparent, #c9a96e, transparent);
     margin: 14px auto;
-  }}
+  }
 
-  .tagline {{
+  .tagline {
     font-size: 12px;
     color: #888;
     letter-spacing: 2px;
     text-transform: uppercase;
-  }}
+  }
 
-  .quick-btns {{
+  .quick-btns {
     display: flex;
     gap: 8px;
     margin-bottom: 20px;
     flex-wrap: wrap;
     justify-content: center;
     max-width: 720px;
-  }}
+  }
 
-  .qbtn {{
+  .qbtn {
     background: transparent;
     border: 1px solid #c9a96e;
     color: #c9a96e;
@@ -205,25 +206,25 @@ HTML = """<!DOCTYPE html>
     text-transform: uppercase;
     text-decoration: none;
     display: inline-block;
-  }}
+  }
 
-  .qbtn:hover {{
+  .qbtn:hover {
     background: #c9a96e;
     color: #0d0d0d;
-  }}
+  }
 
-  .qbtn.order-btn {{
+  .qbtn.order-btn {
     background: linear-gradient(135deg, #c9a96e, #b8933a);
     color: #0d0d0d;
     border: none;
     font-weight: 700;
-  }}
+  }
 
-  .qbtn.order-btn:hover {{
+  .qbtn.order-btn:hover {
     opacity: 0.85;
-  }}
+  }
 
-  .chat-box {{
+  .chat-box {
     background: #1a1a1a;
     border: 1px solid #2a2a2a;
     border-radius: 16px;
@@ -231,18 +232,18 @@ HTML = """<!DOCTYPE html>
     max-width: 720px;
     overflow: hidden;
     box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-  }}
+  }
 
-  .chat-top {{
+  .chat-top {
     background: linear-gradient(135deg, #1a1408, #2d2006);
     border-bottom: 1px solid #c9a96e33;
     padding: 18px 24px;
     display: flex;
     align-items: center;
     gap: 14px;
-  }}
+  }
 
-  .avatar {{
+  .avatar {
     width: 46px;
     height: 46px;
     background: linear-gradient(135deg, #c9a96e, #e8c98a);
@@ -252,32 +253,32 @@ HTML = """<!DOCTYPE html>
     justify-content: center;
     font-size: 20px;
     flex-shrink: 0;
-  }}
+  }
 
-  .agent-meta h2 {{
+  .agent-meta h2 {
     color: #f5f0e8;
     font-size: 16px;
     font-weight: 600;
     letter-spacing: 1px;
-  }}
+  }
 
-  .agent-meta p {{
+  .agent-meta p {
     color: #c9a96e;
     font-size: 11px;
     margin-top: 3px;
     letter-spacing: 1px;
-  }}
+  }
 
-  .dot {{
+  .dot {
     display: inline-block;
     width: 7px;
     height: 7px;
     background: #4caf50;
     border-radius: 50%;
     margin-right: 5px;
-  }}
+  }
 
-  #chat {{
+  #chat {
     padding: 24px;
     min-height: 420px;
     max-height: 500px;
@@ -285,59 +286,59 @@ HTML = """<!DOCTYPE html>
     display: flex;
     flex-direction: column;
     gap: 18px;
-  }}
+  }
 
-  .msg {{
+  .msg {
     display: flex;
     flex-direction: column;
-  }}
+  }
 
-  .msg.user {{ align-items: flex-end; }}
-  .msg.agent {{ align-items: flex-start; }}
+  .msg.user { align-items: flex-end; }
+  .msg.agent { align-items: flex-start; }
 
-  .msg-label {{
+  .msg-label {
     font-size: 10px;
     letter-spacing: 1.5px;
     text-transform: uppercase;
     color: #555;
     margin-bottom: 5px;
     font-weight: 600;
-  }}
+  }
 
-  .msg.user .msg-label {{ color: #c9a96e88; }}
+  .msg.user .msg-label { color: #c9a96e88; }
 
-  .bubble {{
+  .bubble {
     max-width: 72%;
     padding: 13px 18px;
     font-size: 14px;
     line-height: 1.7;
     border-radius: 16px;
     white-space: pre-wrap;
-  }}
+  }
 
-  .bubble.user {{
+  .bubble.user {
     background: linear-gradient(135deg, #c9a96e, #b8933a);
     color: #0d0d0d;
     border-bottom-right-radius: 4px;
     font-weight: 500;
-  }}
+  }
 
-  .bubble.agent {{
+  .bubble.agent {
     background: #242424;
     color: #e8e0d0;
     border-bottom-left-radius: 4px;
     border: 1px solid #2e2e2e;
-  }}
+  }
 
-  .input-row {{
+  .input-row {
     padding: 16px 20px;
     border-top: 1px solid #2a2a2a;
     display: flex;
     gap: 10px;
     background: #161616;
-  }}
+  }
 
-  input[type=text] {{
+  input[type=text] {
     flex: 1;
     padding: 12px 18px;
     background: #222;
@@ -347,12 +348,12 @@ HTML = """<!DOCTYPE html>
     font-size: 14px;
     outline: none;
     transition: border-color 0.2s;
-  }}
+  }
 
-  input[type=text]:focus {{ border-color: #c9a96e; }}
-  input[type=text]::placeholder {{ color: #555; }}
+  input[type=text]:focus { border-color: #c9a96e; }
+  input[type=text]::placeholder { color: #555; }
 
-  .send-btn {{
+  .send-btn {
     padding: 12px 22px;
     background: linear-gradient(135deg, #c9a96e, #b8933a);
     color: #0d0d0d;
@@ -364,22 +365,22 @@ HTML = """<!DOCTYPE html>
     letter-spacing: 1px;
     text-transform: uppercase;
     transition: opacity 0.2s;
-  }}
+  }
 
-  .send-btn:hover {{ opacity: 0.85; }}
+  .send-btn:hover { opacity: 0.85; }
 
-  .footer {{
+  .footer {
     text-align: center;
     margin-top: 20px;
     font-size: 10px;
     color: #444;
     letter-spacing: 2px;
     text-transform: uppercase;
-  }}
+  }
 
-  #chat::-webkit-scrollbar {{ width: 4px; }}
-  #chat::-webkit-scrollbar-track {{ background: #1a1a1a; }}
-  #chat::-webkit-scrollbar-thumb {{ background: #c9a96e44; border-radius: 2px; }}
+  #chat::-webkit-scrollbar { width: 4px; }
+  #chat::-webkit-scrollbar-track { background: #1a1a1a; }
+  #chat::-webkit-scrollbar-thumb { background: #c9a96e44; border-radius: 2px; }
 </style>
 </head>
 <body>
@@ -407,7 +408,7 @@ HTML = """<!DOCTYPE html>
       <div class="avatar">&#10022;</div>
       <div class="agent-meta">
         <h2>TEMI</h2>
-        <p><span class="dot"></span>Contact by Tems · Skincare AI</p>
+        <p><span class="dot"></span>Contact by Tems &middot; Skincare AI</p>
       </div>
     </div>
 
@@ -416,7 +417,7 @@ HTML = """<!DOCTYPE html>
         <div class="msg-label">Temi</div>
         <div class="bubble agent">Hi, I'm Temi. What's your main skin concern?</div>
       </div>
-      {messages}
+      MESSAGES_PLACEHOLDER
     </div>
 
     <form class="input-row" method="post" action="/chat">
@@ -443,8 +444,8 @@ ORDER_HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Place an Order — Contact by Tems</title>
 <style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
     font-family: 'Segoe UI', Georgia, sans-serif;
     background: #0d0d0d;
     min-height: 100vh;
@@ -453,30 +454,30 @@ ORDER_HTML = """<!DOCTYPE html>
     align-items: center;
     padding: 30px 16px;
     color: #e8e0d0;
-  }}
-  .header {{ text-align: center; margin-bottom: 32px; }}
-  .brand {{ font-size: 11px; letter-spacing: 6px; color: #c9a96e; text-transform: uppercase; margin-bottom: 8px; }}
-  .logo {{ font-size: 28px; font-weight: 300; color: #f5f0e8; letter-spacing: 4px; text-transform: uppercase; }}
-  .logo span {{ color: #c9a96e; font-weight: 700; }}
-  .divider {{ width: 60px; height: 1px; background: linear-gradient(to right, transparent, #c9a96e, transparent); margin: 14px auto; }}
-  .page-title {{ font-size: 18px; letter-spacing: 3px; color: #c9a96e; text-transform: uppercase; margin-top: 4px; }}
+  }
+  .header { text-align: center; margin-bottom: 32px; }
+  .brand { font-size: 11px; letter-spacing: 6px; color: #c9a96e; text-transform: uppercase; margin-bottom: 8px; }
+  .logo { font-size: 28px; font-weight: 300; color: #f5f0e8; letter-spacing: 4px; text-transform: uppercase; }
+  .logo span { color: #c9a96e; font-weight: 700; }
+  .divider { width: 60px; height: 1px; background: linear-gradient(to right, transparent, #c9a96e, transparent); margin: 14px auto; }
+  .page-title { font-size: 18px; letter-spacing: 3px; color: #c9a96e; text-transform: uppercase; margin-top: 4px; }
 
-  .order-wrap {{
+  .order-wrap {
     width: 100%;
     max-width: 760px;
     display: flex;
     flex-direction: column;
     gap: 28px;
-  }}
+  }
 
-  .card {{
+  .card {
     background: #1a1a1a;
     border: 1px solid #2a2a2a;
     border-radius: 16px;
     padding: 28px;
-  }}
+  }
 
-  .card h3 {{
+  .card h3 {
     font-size: 11px;
     letter-spacing: 3px;
     text-transform: uppercase;
@@ -484,39 +485,39 @@ ORDER_HTML = """<!DOCTYPE html>
     margin-bottom: 20px;
     padding-bottom: 12px;
     border-bottom: 1px solid #2a2a2a;
-  }}
+  }
 
-  .category {{ margin-bottom: 24px; }}
-  .category:last-child {{ margin-bottom: 0; }}
-  .category-name {{
+  .category { margin-bottom: 24px; }
+  .category:last-child { margin-bottom: 0; }
+  .category-name {
     font-size: 12px;
     letter-spacing: 2px;
     text-transform: uppercase;
     color: #888;
     margin-bottom: 12px;
-  }}
+  }
 
-  .product-row {{
+  .product-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 10px 0;
     border-bottom: 1px solid #222;
     gap: 12px;
-  }}
-  .product-row:last-child {{ border-bottom: none; }}
+  }
+  .product-row:last-child { border-bottom: none; }
 
-  .product-info {{ flex: 1; }}
-  .product-name {{ font-size: 14px; color: #f0e8d8; margin-bottom: 2px; }}
-  .product-price {{ font-size: 12px; color: #c9a96e; }}
+  .product-info { flex: 1; }
+  .product-name { font-size: 14px; color: #f0e8d8; margin-bottom: 2px; }
+  .product-price { font-size: 12px; color: #c9a96e; }
 
-  .qty-control {{
+  .qty-control {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
-  }}
-  .qty-control input[type=number] {{
+  }
+  .qty-control input[type=number] {
     width: 60px;
     padding: 6px 10px;
     background: #222;
@@ -526,19 +527,19 @@ ORDER_HTML = """<!DOCTYPE html>
     font-size: 14px;
     text-align: center;
     outline: none;
-  }}
-  .qty-control input[type=number]:focus {{ border-color: #c9a96e; }}
+  }
+  .qty-control input[type=number]:focus { border-color: #c9a96e; }
 
-  .field-group {{ display: flex; flex-direction: column; gap: 16px; }}
-  .field label {{
+  .field-group { display: flex; flex-direction: column; gap: 16px; }
+  .field label {
     display: block;
     font-size: 10px;
     letter-spacing: 2px;
     text-transform: uppercase;
     color: #888;
     margin-bottom: 6px;
-  }}
-  .field input, .field textarea {{
+  }
+  .field input, .field textarea {
     width: 100%;
     padding: 12px 16px;
     background: #222;
@@ -550,22 +551,22 @@ ORDER_HTML = """<!DOCTYPE html>
     outline: none;
     transition: border-color 0.2s;
     resize: vertical;
-  }}
-  .field input:focus, .field textarea:focus {{ border-color: #c9a96e; }}
-  .field input::placeholder, .field textarea::placeholder {{ color: #555; }}
+  }
+  .field input:focus, .field textarea:focus { border-color: #c9a96e; }
+  .field input::placeholder, .field textarea::placeholder { color: #555; }
 
-  .total-bar {{
+  .total-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 16px 0;
     border-top: 1px solid #2a2a2a;
     margin-top: 8px;
-  }}
-  .total-label {{ font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #888; }}
-  #total-display {{ font-size: 22px; color: #c9a96e; font-weight: 700; }}
+  }
+  .total-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #888; }
+  #total-display { font-size: 22px; color: #c9a96e; font-weight: 700; }
 
-  .submit-btn {{
+  .submit-btn {
     width: 100%;
     padding: 16px;
     background: linear-gradient(135deg, #c9a96e, #b8933a);
@@ -579,10 +580,10 @@ ORDER_HTML = """<!DOCTYPE html>
     cursor: pointer;
     transition: opacity 0.2s;
     margin-top: 8px;
-  }}
-  .submit-btn:hover {{ opacity: 0.85; }}
+  }
+  .submit-btn:hover { opacity: 0.85; }
 
-  .back-link {{
+  .back-link {
     display: inline-block;
     margin-bottom: 20px;
     font-size: 11px;
@@ -590,17 +591,17 @@ ORDER_HTML = """<!DOCTYPE html>
     text-transform: uppercase;
     color: #c9a96e;
     text-decoration: none;
-  }}
-  .back-link:hover {{ text-decoration: underline; }}
+  }
+  .back-link:hover { text-decoration: underline; }
 
-  .footer {{
+  .footer {
     text-align: center;
     margin-top: 24px;
     font-size: 10px;
     color: #444;
     letter-spacing: 2px;
     text-transform: uppercase;
-  }}
+  }
 </style>
 </head>
 <body>
@@ -619,7 +620,7 @@ ORDER_HTML = """<!DOCTYPE html>
 
     <div class="card" style="margin-bottom:28px">
       <h3>Select Products &amp; Quantities</h3>
-      {product_rows}
+      PRODUCT_ROWS_PLACEHOLDER
       <div class="total-bar">
         <span class="total-label">Order Total</span>
         <span id="total-display">&#8358;0</span>
@@ -651,22 +652,22 @@ ORDER_HTML = """<!DOCTYPE html>
 <div class="footer">&copy; Contact by Tems &middot; All Rights Reserved</div>
 
 <script>
-  const prices = {prices_json};
+  const prices = PRICES_JSON_PLACEHOLDER;
 
-  function updateTotal() {{
+  function updateTotal() {
     let total = 0;
-    document.querySelectorAll('input[type=number]').forEach(function(input) {{
+    document.querySelectorAll('input[type=number]').forEach(function(input) {
       const qty = parseInt(input.value) || 0;
       const price = prices[input.name] || 0;
       total += qty * price;
-    }});
+    });
     document.getElementById('total-display').textContent =
-      '\\u20a6' + total.toLocaleString('en-NG');
-  }}
+      '\u20a6' + total.toLocaleString('en-NG');
+  }
 
-  document.querySelectorAll('input[type=number]').forEach(function(input) {{
+  document.querySelectorAll('input[type=number]').forEach(function(input) {
     input.addEventListener('input', updateTotal);
-  }});
+  });
 </script>
 </body>
 </html>"""
@@ -679,8 +680,8 @@ CONFIRMATION_HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Order Confirmed — Contact by Tems</title>
 <style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
     font-family: 'Segoe UI', Georgia, sans-serif;
     background: #0d0d0d;
     min-height: 100vh;
@@ -689,23 +690,23 @@ CONFIRMATION_HTML = """<!DOCTYPE html>
     align-items: center;
     padding: 40px 16px;
     color: #e8e0d0;
-  }}
-  .header {{ text-align: center; margin-bottom: 36px; }}
-  .brand {{ font-size: 11px; letter-spacing: 6px; color: #c9a96e; text-transform: uppercase; margin-bottom: 8px; }}
-  .logo {{ font-size: 28px; font-weight: 300; color: #f5f0e8; letter-spacing: 4px; text-transform: uppercase; }}
-  .logo span {{ color: #c9a96e; font-weight: 700; }}
-  .divider {{ width: 60px; height: 1px; background: linear-gradient(to right, transparent, #c9a96e, transparent); margin: 14px auto; }}
+  }
+  .header { text-align: center; margin-bottom: 36px; }
+  .brand { font-size: 11px; letter-spacing: 6px; color: #c9a96e; text-transform: uppercase; margin-bottom: 8px; }
+  .logo { font-size: 28px; font-weight: 300; color: #f5f0e8; letter-spacing: 4px; text-transform: uppercase; }
+  .logo span { color: #c9a96e; font-weight: 700; }
+  .divider { width: 60px; height: 1px; background: linear-gradient(to right, transparent, #c9a96e, transparent); margin: 14px auto; }
 
-  .confirm-card {{
+  .confirm-card {
     background: #1a1a1a;
     border: 1px solid #2a2a2a;
     border-radius: 16px;
     padding: 36px 32px;
     width: 100%;
     max-width: 600px;
-  }}
+  }
 
-  .check-icon {{
+  .check-icon {
     width: 64px;
     height: 64px;
     background: linear-gradient(135deg, #c9a96e, #b8933a);
@@ -716,35 +717,35 @@ CONFIRMATION_HTML = """<!DOCTYPE html>
     font-size: 28px;
     margin: 0 auto 20px;
     color: #0d0d0d;
-  }}
+  }
 
-  .confirm-title {{
+  .confirm-title {
     text-align: center;
     font-size: 20px;
     letter-spacing: 3px;
     text-transform: uppercase;
     color: #c9a96e;
     margin-bottom: 6px;
-  }}
+  }
 
-  .confirm-subtitle {{
+  .confirm-subtitle {
     text-align: center;
     font-size: 13px;
     color: #888;
     margin-bottom: 28px;
-  }}
+  }
 
-  .order-id {{
+  .order-id {
     text-align: center;
     font-size: 11px;
     letter-spacing: 2px;
     text-transform: uppercase;
     color: #555;
     margin-bottom: 28px;
-  }}
+  }
 
-  .section {{ margin-bottom: 24px; }}
-  .section-label {{
+  .section { margin-bottom: 24px; }
+  .section-label {
     font-size: 10px;
     letter-spacing: 3px;
     text-transform: uppercase;
@@ -752,45 +753,45 @@ CONFIRMATION_HTML = """<!DOCTYPE html>
     margin-bottom: 10px;
     padding-bottom: 8px;
     border-bottom: 1px solid #2a2a2a;
-  }}
+  }
 
-  .detail-row {{
+  .detail-row {
     display: flex;
     justify-content: space-between;
     padding: 6px 0;
     font-size: 14px;
-  }}
-  .detail-row .label {{ color: #888; }}
-  .detail-row .value {{ color: #f0e8d8; text-align: right; max-width: 60%; }}
+  }
+  .detail-row .label { color: #888; }
+  .detail-row .value { color: #f0e8d8; text-align: right; max-width: 60%; }
 
-  .item-row {{
+  .item-row {
     display: flex;
     justify-content: space-between;
     padding: 7px 0;
     font-size: 13px;
     border-bottom: 1px solid #222;
-  }}
-  .item-row:last-child {{ border-bottom: none; }}
-  .item-row .item-name {{ color: #e8e0d0; }}
-  .item-row .item-subtotal {{ color: #c9a96e; }}
+  }
+  .item-row:last-child { border-bottom: none; }
+  .item-row .item-name { color: #e8e0d0; }
+  .item-row .item-subtotal { color: #c9a96e; }
 
-  .total-row {{
+  .total-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding-top: 14px;
     margin-top: 4px;
     border-top: 1px solid #2a2a2a;
-  }}
-  .total-row .label {{ font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #888; }}
-  .total-row .value {{ font-size: 22px; color: #c9a96e; font-weight: 700; }}
+  }
+  .total-row .label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #888; }
+  .total-row .value { font-size: 22px; color: #c9a96e; font-weight: 700; }
 
-  .btn-group {{
+  .btn-group {
     display: flex;
     gap: 12px;
     margin-top: 28px;
-  }}
-  .btn {{
+  }
+  .btn {
     flex: 1;
     padding: 13px;
     border-radius: 10px;
@@ -801,26 +802,26 @@ CONFIRMATION_HTML = """<!DOCTYPE html>
     text-align: center;
     text-decoration: none;
     cursor: pointer;
-  }}
-  .btn-primary {{
+  }
+  .btn-primary {
     background: linear-gradient(135deg, #c9a96e, #b8933a);
     color: #0d0d0d;
     border: none;
-  }}
-  .btn-secondary {{
+  }
+  .btn-secondary {
     background: transparent;
     color: #c9a96e;
     border: 1px solid #c9a96e;
-  }}
+  }
 
-  .footer {{
+  .footer {
     text-align: center;
     margin-top: 24px;
     font-size: 10px;
     color: #444;
     letter-spacing: 2px;
     text-transform: uppercase;
-  }}
+  }
 </style>
 </head>
 <body>
@@ -835,22 +836,22 @@ CONFIRMATION_HTML = """<!DOCTYPE html>
   <div class="check-icon">&#10003;</div>
   <div class="confirm-title">Order Confirmed!</div>
   <div class="confirm-subtitle">Thank you for your order. We'll be in touch soon.</div>
-  <div class="order-id">Order ID: {order_id}</div>
+  <div class="order-id">Order ID: ORDER_ID_PLACEHOLDER</div>
 
   <div class="section">
     <div class="section-label">Customer Details</div>
-    <div class="detail-row"><span class="label">Name</span><span class="value">{customer_name}</span></div>
-    <div class="detail-row"><span class="label">Phone</span><span class="value">{phone}</span></div>
-    <div class="detail-row"><span class="label">Delivery Address</span><span class="value">{address}</span></div>
-    <div class="detail-row"><span class="label">Order Date</span><span class="value">{order_date}</span></div>
+    <div class="detail-row"><span class="label">Name</span><span class="value">CUSTOMER_NAME_PLACEHOLDER</span></div>
+    <div class="detail-row"><span class="label">Phone</span><span class="value">PHONE_PLACEHOLDER</span></div>
+    <div class="detail-row"><span class="label">Delivery Address</span><span class="value">ADDRESS_PLACEHOLDER</span></div>
+    <div class="detail-row"><span class="label">Order Date</span><span class="value">ORDER_DATE_PLACEHOLDER</span></div>
   </div>
 
   <div class="section">
     <div class="section-label">Order Summary</div>
-    {item_rows}
+    ITEM_ROWS_PLACEHOLDER
     <div class="total-row">
       <span class="label">Total</span>
-      <span class="value">&#8358;{total}</span>
+      <span class="value">&#8358;TOTAL_PLACEHOLDER</span>
     </div>
   </div>
 
@@ -865,12 +866,23 @@ CONFIRMATION_HTML = """<!DOCTYPE html>
 </html>"""
 
 
+def to_field_name(product_name):
+    return product_name.replace(" ", "_").replace("(", "").replace(")", "").replace("+", "").replace("/", "_")
+
+
+def field_name_to_product(field_name):
+    for name in ALL_PRODUCTS:
+        if to_field_name(name) == field_name:
+            return name
+    return None
+
+
 def build_product_rows():
     rows_html = ""
     for category, products in PRODUCT_MENU.items():
         rows_html += f'<div class="category"><div class="category-name">{category}</div>'
         for name, price in products.items():
-            field_name = name.replace(" ", "_").replace("(", "").replace(")", "").replace("+", "").replace("/", "_")
+            field_name = to_field_name(name)
             rows_html += f"""
         <div class="product-row">
           <div class="product-info">
@@ -883,15 +895,6 @@ def build_product_rows():
         </div>"""
         rows_html += "</div>"
     return rows_html
-
-
-def field_name_to_product(field_name):
-    """Reverse-map a field name back to a product name."""
-    for name in ALL_PRODUCTS:
-        candidate = name.replace(" ", "_").replace("(", "").replace(")", "").replace("+", "").replace("/", "_")
-        if candidate == field_name:
-            return name
-    return None
 
 
 def save_order(order):
@@ -925,136 +928,97 @@ def format_messages(msgs):
     return html
 
 
-class ContactByTemsAgent(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == "/order":
-            self._serve_order_page()
-        else:
-            self._serve_chat_page()
+@app.route("/", methods=["GET"])
+def index():
+    page = HTML.replace("MESSAGES_PLACEHOLDER", format_messages(conversation))
+    return make_response(page)
 
-    def _serve_chat_page(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/html")
-        self.end_headers()
-        page = HTML.format(messages=format_messages(conversation))
-        self.wfile.write(page.encode("utf-8"))
 
-    def _serve_order_page(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/html")
-        self.end_headers()
-        prices_json = json.dumps(
-            {
-                name.replace(" ", "_").replace("(", "").replace(")", "").replace("+", "").replace("/", "_"): price
-                for name, price in ALL_PRODUCTS.items()
-            }
+@app.route("/order", methods=["GET"])
+def order_page():
+    prices_json = json.dumps({to_field_name(name): price for name, price in ALL_PRODUCTS.items()})
+    page = ORDER_HTML.replace("PRODUCT_ROWS_PLACEHOLDER", build_product_rows())
+    page = page.replace("PRICES_JSON_PLACEHOLDER", prices_json)
+    return make_response(page)
+
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    user_msg = request.form.get("msg", "").strip()
+
+    if user_msg:
+        conversation.append({"role": "user", "content": user_msg})
+
+        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        response = client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=1024,
+            system=SYSTEM_PROMPT,
+            messages=conversation,
         )
-        page = ORDER_HTML.format(
-            product_rows=build_product_rows(),
-            prices_json=prices_json,
-        )
-        self.wfile.write(page.encode("utf-8"))
 
-    def do_POST(self):
-        length = int(self.headers["Content-Length"])
-        body = self.rfile.read(length).decode("utf-8")
+        reply = next((b.text for b in response.content if hasattr(b, "text")), "")
+        conversation.append({"role": "assistant", "content": reply})
 
-        if self.path == "/place_order":
-            self._handle_place_order(body)
-        else:
-            self._handle_chat(body)
+    return redirect("/")
 
-    def _handle_chat(self, body):
-        user_msg = unquote_plus(body.split("=", 1)[1]).strip() if "=" in body else ""
 
-        if user_msg:
-            conversation.append({"role": "user", "content": user_msg})
+@app.route("/place_order", methods=["POST"])
+def place_order():
+    customer_name = request.form.get("customer_name", "").strip()
+    phone = request.form.get("phone", "").strip()
+    address = request.form.get("address", "").strip()
 
-            client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-            response = client.messages.create(
-                model="claude-opus-4-6",
-                max_tokens=1024,
-                system=SYSTEM_PROMPT,
-                messages=conversation,
-            )
+    items = []
+    total = 0
+    for field_name, value in request.form.items():
+        if field_name in ("customer_name", "phone", "address"):
+            continue
+        qty = int(value) if value.isdigit() else 0
+        if qty <= 0:
+            continue
+        product_name = field_name_to_product(field_name)
+        if product_name and product_name in ALL_PRODUCTS:
+            price = ALL_PRODUCTS[product_name]
+            subtotal = price * qty
+            total += subtotal
+            items.append({"product": product_name, "qty": qty, "unit_price": price, "subtotal": subtotal})
 
-            reply = next((b.text for b in response.content if hasattr(b, "text")), "")
-            conversation.append({"role": "assistant", "content": reply})
+    if not items or not customer_name or not phone or not address:
+        return redirect("/order")
 
-        self.send_response(303)
-        self.send_header("Location", "/")
-        self.end_headers()
+    now = datetime.now()
+    order_id = f"CBT-{now.strftime('%Y%m%d%H%M%S')}"
+    order_date = now.strftime("%d %B %Y, %I:%M %p")
 
-    def _handle_place_order(self, body):
-        params = parse_qs(body)
+    order = {
+        "order_id": order_id,
+        "order_date": now.isoformat(),
+        "customer_name": customer_name,
+        "phone": phone,
+        "address": address,
+        "items": items,
+        "total": total,
+    }
+    save_order(order)
 
-        customer_name = unquote_plus(params.get("customer_name", [""])[0]).strip()
-        phone = unquote_plus(params.get("phone", [""])[0]).strip()
-        address = unquote_plus(params.get("address", [""])[0]).strip()
-
-        # Collect ordered items
-        items = []
-        total = 0
-        for field_name, values in params.items():
-            if field_name in ("customer_name", "phone", "address"):
-                continue
-            qty = int(values[0]) if values[0].isdigit() else 0
-            if qty <= 0:
-                continue
-            product_name = field_name_to_product(field_name)
-            if product_name and product_name in ALL_PRODUCTS:
-                price = ALL_PRODUCTS[product_name]
-                subtotal = price * qty
-                total += subtotal
-                items.append({"product": product_name, "qty": qty, "unit_price": price, "subtotal": subtotal})
-
-        if not items or not customer_name or not phone or not address:
-            # Redirect back if nothing was ordered or required fields missing
-            self.send_response(303)
-            self.send_header("Location", "/order")
-            self.end_headers()
-            return
-
-        now = datetime.now()
-        order_id = f"CBT-{now.strftime('%Y%m%d%H%M%S')}"
-        order_date = now.strftime("%d %B %Y, %I:%M %p")
-
-        order = {
-            "order_id": order_id,
-            "order_date": now.isoformat(),
-            "customer_name": customer_name,
-            "phone": phone,
-            "address": address,
-            "items": items,
-            "total": total,
-        }
-        save_order(order)
-
-        # Build item rows for confirmation page
-        item_rows_html = ""
-        for item in items:
-            item_rows_html += f"""
+    item_rows_html = ""
+    for item in items:
+        item_rows_html += f"""
         <div class="item-row">
           <span class="item-name">{item['product']} &times; {item['qty']}</span>
           <span class="item-subtotal">&#8358;{item['subtotal']:,}</span>
         </div>"""
 
-        self.send_response(200)
-        self.send_header("Content-type", "text/html")
-        self.end_headers()
-        page = CONFIRMATION_HTML.format(
-            order_id=order_id,
-            customer_name=customer_name,
-            phone=phone,
-            address=address,
-            order_date=order_date,
-            item_rows=item_rows_html,
-            total=f"{total:,}",
-        )
-        self.wfile.write(page.encode("utf-8"))
-
-    def log_message(self, *args):
-        pass
+    page = CONFIRMATION_HTML
+    page = page.replace("ORDER_ID_PLACEHOLDER", order_id)
+    page = page.replace("CUSTOMER_NAME_PLACEHOLDER", customer_name)
+    page = page.replace("PHONE_PLACEHOLDER", phone)
+    page = page.replace("ADDRESS_PLACEHOLDER", address)
+    page = page.replace("ORDER_DATE_PLACEHOLDER", order_date)
+    page = page.replace("ITEM_ROWS_PLACEHOLDER", item_rows_html)
+    page = page.replace("TOTAL_PLACEHOLDER", f"{total:,}")
+    return make_response(page)
 
 
 if __name__ == "__main__":
@@ -1063,4 +1027,4 @@ if __name__ == "__main__":
     print(f"  Open your browser at: http://localhost:{PORT}")
     print(f"  Orders will be saved to: {ORDERS_FILE}")
     print("  Press Ctrl+C to stop.\n")
-    HTTPServer(("", PORT), ContactByTemsAgent).serve_forever()
+    app.run(host="0.0.0.0", port=PORT)
