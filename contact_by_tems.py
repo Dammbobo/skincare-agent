@@ -2,7 +2,7 @@ import anthropic
 import json
 import os
 from datetime import datetime
-from flask import Flask, request, redirect, make_response
+from flask import Flask, request, redirect, make_response, jsonify
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -949,7 +949,11 @@ def chat():
     if user_msg:
         conversation.append({"role": "user", "content": user_msg})
 
-        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        print(f"API KEY STATUS: {'FOUND' if api_key else 'NOT FOUND'}")
+        if not api_key:
+            return jsonify({"error": "API key not configured"}), 500
+        client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model="claude-opus-4-6",
             max_tokens=1024,
