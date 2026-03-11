@@ -10,7 +10,6 @@ load_dotenv()
 
 api_key = os.environ.get("ANTHROPIC_API_KEY")
 print(f"API KEY LOADED: {os.environ.get('ANTHROPIC_API_KEY', 'NOT FOUND')[:20]}")
-client = anthropic.Anthropic(api_key=api_key)
 conversation = []
 
 ORDERS_FILE = "orders.json"
@@ -971,6 +970,7 @@ class ContactByTemsAgent(BaseHTTPRequestHandler):
         if user_msg:
             conversation.append({"role": "user", "content": user_msg})
 
+            client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
             response = client.messages.create(
                 model="claude-opus-4-6",
                 max_tokens=1024,
