@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-api_key = os.environ.get("ANTHROPIC_API_KEY")
-print(f"API KEY LOADED: {os.environ.get('ANTHROPIC_API_KEY', 'NOT FOUND')[:20]}")
+api_key = os.environ.get("CLAUDE_API_KEY")
+print(f"API KEY LOADED: {os.environ.get('CLAUDE_API_KEY', 'NOT FOUND')[:20]}")
 
 app = Flask(__name__)
 conversation = []
@@ -949,7 +949,7 @@ def chat():
     if user_msg:
         conversation.append({"role": "user", "content": user_msg})
 
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        api_key = os.environ.get("CLAUDE_API_KEY")
         print(f"API KEY STATUS: {'FOUND' if api_key else 'NOT FOUND'}")
         if not api_key:
             return jsonify({"error": "API key not configured"}), 500
