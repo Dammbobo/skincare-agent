@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 api_key = os.environ.get("ANTHROPIC_API_KEY")
+print(f"API KEY LOADED: {os.environ.get('ANTHROPIC_API_KEY', 'NOT FOUND')[:20]}")
 client = anthropic.Anthropic(api_key=api_key)
 conversation = []
 
