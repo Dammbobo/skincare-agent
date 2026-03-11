@@ -1053,7 +1053,7 @@ class ContactByTemsAgent(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    PORT = 8081
+    PORT = int(os.environ.get("PORT", 8081))
     print("\n  Contact by Tems — Skincare AI Agent")
     print(f"  Open your browser at: http://localhost:{PORT}")
     print(f"  Orders will be saved to: {ORDERS_FILE}")
