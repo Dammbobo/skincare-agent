@@ -4,8 +4,12 @@ import os
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import unquote_plus, parse_qs
+from dotenv import load_dotenv
 
-client = anthropic.Anthropic()
+load_dotenv()
+
+api_key = os.environ.get("ANTHROPIC_API_KEY")
+client = anthropic.Anthropic(api_key=api_key)
 conversation = []
 
 ORDERS_FILE = "orders.json"
