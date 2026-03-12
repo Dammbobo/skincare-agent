@@ -1,14 +1,10 @@
+import os
+ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+
 import anthropic
 import json
-import os
 from datetime import datetime
 from flask import Flask, request, redirect, make_response, jsonify
-from dotenv import load_dotenv
-
-load_dotenv()
-
-api_key = os.environ.get("CLAUDE_API_KEY")
-print(f"API KEY LOADED: {os.environ.get('CLAUDE_API_KEY', 'NOT FOUND')[:20]}")
 
 app = Flask(__name__)
 conversation = []
@@ -949,11 +945,7 @@ def chat():
     if user_msg:
         conversation.append({"role": "user", "content": user_msg})
 
-        api_key = os.environ.get("CLAUDE_API_KEY")
-        print(f"API KEY STATUS: {'FOUND' if api_key else 'NOT FOUND'}")
-        if not api_key:
-            return jsonify({"error": "API key not configured"}), 500
-        client = anthropic.Anthropic(api_key=api_key)
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         response = client.messages.create(
             model="claude-opus-4-6",
             max_tokens=1024,
